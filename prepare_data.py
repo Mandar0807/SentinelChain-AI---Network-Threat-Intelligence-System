@@ -9,8 +9,8 @@ PHISHING_CSV = "data/phishing.csv"
 SAFE_CSV     = "data/safe.csv"
 OUTPUT_CSV   = "data/dataset.csv"
 
-MAX_PHISHING = 3000
-MAX_SAFE     = 3000
+MAX_PHISHING = 5000
+MAX_SAFE     = 5000
 
 
 def load_phishing_urls(filepath: str) -> list:
@@ -58,9 +58,24 @@ def load_safe_urls(filepath: str) -> list:
             print(f"      'Domain' column not found, using: {domain_col}")
 
         domains = df[domain_col].dropna().tolist()
-        urls = [f"https://{str(d).strip()}"
-                for d in domains if str(d).strip() and "." in str(d)]
-        print(f"      Loaded {len(urls)} safe URLs")
+        import random
+        random.seed(42)
+        safe_paths = [
+            "", "/about", "/contact", "/home", "/products",
+            "/services", "/blog", "/news", "/help", "/support",
+            "/user/profile", "/account/settings", "/docs/guide",
+            "/category/tech", "/page/about-us", "/en/home",
+        ]
+
+        urls = []
+        for d in domains:
+            d = str(d).strip()
+            if not d or "." not in d:
+                continue
+            path = random.choice(safe_paths)
+            urls.append(f"https://{d}{path}")
+
+        print(f"      Loaded {len(urls)} safe URLs with varied paths")
         return urls[:MAX_SAFE]
 
     except Exception as e:
