@@ -202,15 +202,17 @@ def print_result(summary: dict, result: dict):
     print(f"  Anomaly score  : {result['anomaly_score']} / 100")
     print(f"  Confidence     : {result['confidence']}%")
     print(f"\n  Traffic stats:")
-    print(f"    Packets      : {summary.get('total_packets', 0)}")
-    print(f"    Bytes        : {summary.get('total_bytes', 0):,}")
-    print(f"    Unique IPs   : {summary.get('unique_dst_ips', 0)}")
+    print(f"    Packets      : {summary.get('total_packets',    0)}")
+    print(f"    Bytes        : {summary.get('total_bytes',      0):,}")
+    print(f"    Unique IPs   : {summary.get('unique_dst_ips',   0)}")
     print(f"    Bytes/sec    : {summary.get('bytes_per_second', 0)}")
-    print(f"    Packets/sec  : {summary.get('packets_per_sec', 0)}")
+    print(f"    Packets/sec  : {summary.get('packets_per_sec',  0)}")
     if result["flags"]:
         print(f"\n  Flags:")
         for flag in result["flags"]:
             print(f"    - {flag}")
+    else:
+        print(f"\n  No suspicious indicators found.")
     print(f"{'=' * 55}")
 
 
