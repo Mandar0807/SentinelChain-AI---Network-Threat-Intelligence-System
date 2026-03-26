@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}ThreatShield — Scan{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+  <div class="col-lg-7">
+
+    <div class="text-center mb-5">
+      <i class="bi bi-shield-lock-fill display-1 text-danger"></i>
+      <h1 class="fw-bold mt-3">ThreatShield</h1>
+      <p class="text-muted lead">
+        AI-powered threat detection with tamper-proof blockchain logging
+      </p>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+
+        <!-- Tab selector -->
+        <ul class="nav nav-pills mb-4 justify-content-center" id="scanTabs">
+          <li class="nav-item">
+            <button class="nav-link active px-4" id="url-tab"
+                    onclick="switchTab('url')">
+              <i class="bi bi-link-45deg me-1"></i>URL
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link px-4" id="file-tab"
+                    onclick="switchTab('file')">
+              <i class="bi bi-file-earmark me-1"></i>File
+            </button>
+          </li>
+        </ul>
+
+        <!-- URL Form -->
+        <form id="url-form" action="/analyse" method="POST">
+          <input type="hidden" name="input_type" value="url"/>
+          <div class="mb-3">
+            <label class="form-label text-muted small">Enter URL to scan</label>
+            <div class="input-group input-group-lg">
+              <span class="input-group-text bg-dark border-secondary">
+                <i class="bi bi-link-45deg text-muted"></i>
+              </span>
+              <input type="text" name="url" class="form-control form-control-lg"
+                     placeholder="https://example.com"
+                     required/>
+            </div>
+          </div>
+          <div class="d-grid mt-4">
+            <button type="submit" class="btn btn-danger btn-lg">
+              <i class="bi bi-shield-check me-2"></i>Analyse URL
+            </button>
+          </div>
+        </form>
+
+        <!-- File Form -->
+        <form id="file-form" action="/analyse" method="POST"
+              enctype="multipart/form-data" style="display:none;">
+          <input type="hidden" name="input_type" value="file"/>
+          <div class="mb-3">
+            <label class="form-label text-muted small">Upload file to scan</label>
+            <input type="file" name="file" class="form-control form-control-lg"
+                   required/>
+            <div class="form-text text-muted">
+              Detects disguised executables using magic byte analysis
+            </div>
+          </div>
+          <div class="d-grid mt-4">
+            <button type="submit" class="btn btn-danger btn-lg">
+              <i class="bi bi-shield-check me-2"></i>Analyse File
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+    <!-- Feature badges -->
+    <div class="row text-center mt-4 g-3">
+      <div class="col-4">
+        <div class="card h-100 py-3">
+          <i class="bi bi-cpu text-danger fs-3"></i>
+          <small class="text-muted mt-2 d-block">AI Detection</small>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card h-100 py-3">
+          <i class="bi bi-activity text-warning fs-3"></i>
+          <small class="text-muted mt-2 d-block">Live Monitor</small>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card h-100 py-3">
+          <i class="bi bi-database-lock text-info fs-3"></i>
+          <small class="text-muted mt-2 d-block">Blockchain Logs</small>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchTab(tab) {
+  document.getElementById('url-form').style.display  = tab === 'url'  ? 'block' : 'none';
+  document.getElementById('file-form').style.display = tab === 'file' ? 'block' : 'none';
+  document.getElementById('url-tab').classList.toggle('active',  tab === 'url');
+  document.getElementById('file-tab').classList.toggle('active', tab === 'file');
+}
+</script>
+{% endblock %}

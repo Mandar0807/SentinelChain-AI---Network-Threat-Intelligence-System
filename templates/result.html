@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}ThreatShield — Result{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-3">
+  <div class="col-lg-8">
+
+    <a href="/" class="btn btn-outline-secondary btn-sm mb-4">
+      <i class="bi bi-arrow-left me-1"></i>New Scan
+    </a>
+
+    <!-- Verdict Card -->
+    {% if result.verdict == "SAFE" %}
+      {% set verdict_class = "success" %}
+      {% set verdict_icon  = "shield-check-fill" %}
+    {% elif result.verdict == "SUSPICIOUS" %}
+      {% set verdict_class = "warning" %}
+      {% set verdict_icon  = "shield-exclamation" %}
+    {% else %}
+      {% set verdict_class = "danger" %}
+      {% set verdict_icon  = "shield-x-fill" %}
+    {% endif %}
+
+    <div class="card shadow-sm mb-4 border-{{ verdict_class }}">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-{{ verdict_icon }} display-1 text-{{ verdict_class }}"></i>
+        <h1 class="fw-bold mt-3 text-{{ verdict_class }}">
+          {{ result.verdict }}
+        </h1>
+        <p class="text-muted mb-0">
+          {{ result.input_type | upper }} analysed by
+          {{ result.get('source', 'System') }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="row g-3 mb-4">
+      <div class="col-4">
+        <div class="card text-center py-3 h-100">
+          <div class="fs-2 fw-bold text-{{ verdict_class }}">
+            {{ result.risk_score | round | int }}
+          </div>
+          <small class="text-muted">Risk Score / 100</small>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card text-center py-3 h-100">
+          <div class="fs-2 fw-bold">
+            {{ result.get('confidence', 0) }}%
+          </div>
+          <small class="text-muted">Confidence</small>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="card text-center py-3 h-100">
+          <div class="fs-2 fw-bold">
+            {{ result.flags | length }}
+          </div>
+          <small class="text-muted">Flags Found</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Info -->
+    <div class="card mb-4">
+      <div class="card-body">
+        <h6 class="text-muted mb-2">
+          <i class="bi bi-info-circle me-1"></i>Scanned Input
+        </h6>
+        <code class="text-break">{{ result.input }}</code>
+      </div>
+    </div>
+
+    <!-- Flags -->
+    {% if result.flags %}
+    <div class="card mb-4">
+      <div class="card-header">
+        <i class="bi bi-flag-fill text-danger me-2"></i>
+        <strong>Threat Indicators</strong>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for flag in result.flags %}
+        <li class="list-group-item d-flex align-items-center gap-2">
+          <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+          {{ flag }}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% else %}
+    <div class="alert alert-success">
+      <i class="bi bi-check-circle-fill me-2"></i>
+      No suspicious indicators found.
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="d-flex gap-3 flex-wrap">
+      <a href="/" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Scan Another
+      </a>
+      <a href="/monitor" class="btn btn-warning">
+        <i class="bi bi-activity me-1"></i>Start Runtime Monitor
+      </a>
+      <a href="/logs" class="btn btn-info">
+        <i class="bi bi-database-lock me-1"></i>View Blockchain Logs
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
