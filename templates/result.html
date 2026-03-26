@@ -35,32 +35,44 @@
     </div>
 
     <!-- Stats Row -->
-    <div class="row g-3 mb-4">
-      <div class="col-4">
-        <div class="card text-center py-3 h-100">
-          <div class="fs-2 fw-bold text-{{ verdict_class }}">
-            {{ result.risk_score | round | int }}
-          </div>
-          <small class="text-muted">Risk Score / 100</small>
-        </div>
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3 h-100">
+      <div class="fs-2 fw-bold text-{{ verdict_class }}">
+        {{ result.risk_score | round | int }}
       </div>
-      <div class="col-4">
-        <div class="card text-center py-3 h-100">
-          <div class="fs-2 fw-bold">
-            {{ result.get('confidence', 0) }}%
-          </div>
-          <small class="text-muted">Confidence</small>
-        </div>
-      </div>
-      <div class="col-4">
-        <div class="card text-center py-3 h-100">
-          <div class="fs-2 fw-bold">
-            {{ result.flags | length }}
-          </div>
-          <small class="text-muted">Flags Found</small>
-        </div>
-      </div>
+      <small class="text-muted">Risk Score / 100</small>
     </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3 h-100">
+      <div class="fs-2 fw-bold">
+        {{ result.get('confidence', 0) }}%
+      </div>
+      <small class="text-muted">Confidence</small>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3 h-100">
+      <div class="fs-2 fw-bold">
+        {{ result.flags | length }}
+      </div>
+      <small class="text-muted">Flags Found</small>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center py-3 h-100">
+      <div class="mt-1">
+        {% if result.get('source') == 'AI model' %}
+          <span class="badge bg-danger px-2 py-1">AI Model</span>
+        {% else %}
+          <span class="badge bg-secondary px-2 py-1">Rule-based</span>
+        {% endif %}
+      </div>
+      <small class="text-muted mt-1 d-block">Detection Source</small>
+    </div>
+  </div>
+</div>
 
     <!-- Input Info -->
     <div class="card mb-4">
