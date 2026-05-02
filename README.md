@@ -425,64 +425,8 @@ Update training data in `data/` and re-run `python model.py` to refresh ML model
 
 ## 📈 Future Enhancements
 
-🔜 **Upcoming Features:**
-- 🌐 Browser extension integration (Chrome/Firefox)
-- ☁️ Cloud deployment (AWS Lambda, Heroku)
-- 🧠 Advanced deep learning models (LSTM, Transformer-based classifiers)
-- 📊 Real-time dashboard charts & analytics
-- 📧 Email & Slack alerts for detected threats
-- 🔐 Multi-signature blockchain verification
-- 🤝 API for third-party integrations
-- 🌍 Distributed blockchain logging (multi-chain)
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** — see [LICENSE](LICENSE) file for details.
-
----
-
-## 👨‍💼 Support & Contact
-
-For issues, questions, or suggestions:
-
-- 📝 **GitHub Issues:** [Create an issue](https://github.com/YOUR_USERNAME/threat-detection-system/issues)
-- 💬 **Discussions:** [Join our community](https://github.com/YOUR_USERNAME/threat-detection-system/discussions)
-- 📧 **Email:** your.email@example.com
-
----
-
-## ⭐ Acknowledgments
-
-- **PhishTank** — Phishing URL dataset
-- **Majestic Million** — Legitimate domain list
-- **scikit-learn** — Machine learning framework
-- **web3.py** — Ethereum integration
-- **Ganache** — Local blockchain testing
-- **Scapy** — Network packet manipulation
-
----
-
-<div align="center">
-
-**Built with ❤️ for cybersecurity professionals**
-
-*Making the internet safer, one threat at a time.*
-
-![GitHub stars](https://img.shields.io/github/stars/YOUR_USERNAME/threat-detection-system?style=social)
-![GitHub forks](https://img.shields.io/github/forks/YOUR_USERNAME/threat-detection-system?style=social)
-
-</div>
+- Browser extension integration
+- Cloud deployment (AWS / Heroku)
+- Advanced deep learning models
+- Real-time dashboard charts
+- Email alerts for detected threats
