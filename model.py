@@ -129,6 +129,11 @@ def predict(url_features: dict) -> dict:
     Takes a feature dictionary from url_analyser.py
     and returns a prediction result.
     This is the function called by pre_check.py.
+
+    Verdict thresholds (calibrated to minimize false positives):
+      phishing_pct >= 70  → MALICIOUS   (model is highly confident it's phishing)
+      phishing_pct >= 40  → SUSPICIOUS  (model leans phishing but not sure)
+      phishing_pct <  40  → SAFE        (model believes it's clean)
     """
     model, feature_names = load_trained_model()
 
@@ -137,26 +142,26 @@ def predict(url_features: dict) -> dict:
     X = pd.DataFrame([feature_vector], columns=feature_names)
 
     # Predict class and probability
-    prediction   = model.predict(X)[0]
     probability  = model.predict_proba(X)[0]
 
     confidence_phishing = round(probability[1] * 100, 1)
     confidence_safe     = round(probability[0] * 100, 1)
 
-    # Map to verdict
-    if prediction == 1:
+    # ── Calibrated verdict mapping ─────────────────────────────────────────
+    # Previously used raw model.predict() which classifies anything >50% as
+    # MALICIOUS, causing false positives. Now we use explicit thresholds.
+    if confidence_phishing >= 70:
         verdict    = "MALICIOUS"
         confidence = confidence_phishing
+    elif confidence_phishing >= 40:
+        verdict    = "SUSPICIOUS"
+        confidence = confidence_phishing
     else:
-        if confidence_safe < 70:
-            verdict    = "SUSPICIOUS"
-            confidence = round(100 - confidence_safe, 1)
-        else:
-            verdict    = "SAFE"
-            confidence = confidence_safe
+        verdict    = "SAFE"
+        confidence = confidence_safe
 
     return {
-        "prediction"  : int(prediction),
+        "prediction"  : 1 if confidence_phishing >= 70 else 0,
         "verdict"     : verdict,
         "confidence"  : confidence,
         "phishing_pct": confidence_phishing,

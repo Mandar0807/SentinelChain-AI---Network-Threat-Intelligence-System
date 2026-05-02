@@ -1,11 +1,12 @@
 import threading
 import time
 import datetime
+import socket
 from collections import defaultdict
 
 # Scapy import — requires administrator privileges
 try:
-    from scapy.all import sniff, IP, TCP, UDP, conf
+    from scapy.all import sniff, IP, IPv6, TCP, UDP, conf
     conf.verb = 0          # suppress scapy output
     SCAPY_AVAILABLE = True
 except Exception as e:
@@ -14,7 +15,6 @@ except Exception as e:
 
 
 # ── Shared state ───────────────────────────────────────────────────────────
-# These are accessed by both the sniffer thread and the main thread
 _lock            = threading.Lock()
 _packets         = []          # raw packet log
 _is_monitoring   = False       # flag to control the sniffer loop
@@ -23,31 +23,58 @@ _start_time      = None        # when monitoring started
 _alert_triggered = False       # set to True when anomaly detected
 _alert_reason    = ""          # human readable reason for alert
 
+# Cache for Reverse DNS lookups (IP -> Hostname) to avoid slow repeated lookups
+_dns_cache = {}
+
+
+def _resolve_ip_bg(ip):
+    try:
+        hostname, _, _ = socket.gethostbyaddr(ip)
+        _dns_cache[ip] = hostname
+    except Exception:
+        _dns_cache[ip] = "Unknown Server"
+
+def _resolve_hostname(ip: str) -> str:
+    """Attempt to resolve an IP address to a hostname, with caching."""
+    if ip in _dns_cache:
+        return _dns_cache[ip]
+    
+    # Mark as resolving to prevent multiple threads from starting a lookup for the same IP
+    _dns_cache[ip] = "Resolving..."
+    
+    # Start a background thread to resolve it so we don't block the UI
+    threading.Thread(target=_resolve_ip_bg, args=(ip,), daemon=True).start()
+    
+    return "Resolving..."
+
 
 # ── Packet handler ─────────────────────────────────────────────────────────
 def _handle_packet(packet):
     """
     Called by scapy for every captured packet.
     Runs inside the background thread.
-    Extracts key fields and stores them in shared _packets list.
+    Extracts key fields (including TCP flags for SYN flood detection)
+    and stores them in shared _packets list.
     """
     global _is_monitoring
 
     if not _is_monitoring:
         return
 
-    if IP not in packet:
-        return          # only care about IP packets
+    if IP not in packet and IPv6 not in packet:
+        return          # only care about IP or IPv6 packets
 
     try:
-        src_ip   = packet[IP].src
-        dst_ip   = packet[IP].dst
+        src_ip   = packet[IP].src if IP in packet else packet[IPv6].src
+        dst_ip   = packet[IP].dst if IP in packet else packet[IPv6].dst
         size     = len(packet)
         proto    = "TCP" if TCP in packet else "UDP" if UDP in packet else "OTHER"
         port     = 0
+        tcp_flag = ""
 
         if TCP in packet:
             port = packet[TCP].dport
+            tcp_flag = str(packet[TCP].flags) # e.g., 'S' for SYN, 'A' for ACK
         elif UDP in packet:
             port = packet[UDP].dport
 
@@ -57,6 +84,7 @@ def _handle_packet(packet):
             "dst_ip"    : dst_ip,
             "port"      : port,
             "protocol"  : proto,
+            "tcp_flag"  : tcp_flag,
             "size"      : size,
         }
 
@@ -69,20 +97,15 @@ def _handle_packet(packet):
 
 # ── Sniffer loop ───────────────────────────────────────────────────────────
 def _sniffer_loop():
-    """
-    Runs in background thread.
-    Captures packets in 5-second bursts so we can check
-    the _is_monitoring flag and stop cleanly.
-    """
     global _is_monitoring
 
     while _is_monitoring:
         try:
             sniff(
                 prn     = _handle_packet,
-                filter  = "ip",         # only IP packets
-                store   = False,        # don't store in scapy memory
-                timeout = 5,            # return every 5 seconds
+                filter  = "ip or ip6",  # capture both IPv4 and IPv6
+                store   = False,        
+                timeout = 5,            
             )
         except Exception as e:
             print(f"[monitor] Sniffer error: {e}")
@@ -91,12 +114,8 @@ def _sniffer_loop():
 
 # ── Public API ─────────────────────────────────────────────────────────────
 def start_monitoring():
-    """
-    Start the background packet sniffer.
-    Call this when the user clicks 'Start Monitoring' in the dashboard.
-    """
     global _is_monitoring, _monitor_thread, _packets
-    global _start_time, _alert_triggered, _alert_reason
+    global _start_time, _alert_triggered, _alert_reason, _dns_cache
 
     if _is_monitoring:
         print("[monitor] Already monitoring.")
@@ -109,27 +128,23 @@ def start_monitoring():
     # Reset state
     with _lock:
         _packets.clear()
+        _dns_cache.clear()
 
     _alert_triggered = False
     _alert_reason    = ""
     _is_monitoring   = True
     _start_time      = time.time()
 
-    # Start background thread
     _monitor_thread = threading.Thread(
         target  = _sniffer_loop,
-        daemon  = True,         # dies automatically when main program exits
+        daemon  = True,
         name    = "PacketSniffer"
     )
     _monitor_thread.start()
-    print(f"[monitor] Monitoring started — capturing packets...")
+    print(f"[monitor] Deep Background Tracking started...")
 
 
 def stop_monitoring():
-    """
-    Stop the background packet sniffer.
-    Call this when the user clicks 'Stop Monitoring'.
-    """
     global _is_monitoring, _monitor_thread
 
     if not _is_monitoring:
@@ -146,12 +161,6 @@ def stop_monitoring():
     print(f"[monitor] Total packets captured: {len(_packets)}")
 
 
-def get_packets() -> list:
-    """Return a copy of all captured packets so far."""
-    with _lock:
-        return list(_packets)
-
-
 def get_status() -> dict:
     """Return current monitoring status and basic stats."""
     with _lock:
@@ -159,10 +168,7 @@ def get_status() -> dict:
         duration = round(time.time() - _start_time, 1) \
                    if _start_time and _is_monitoring else 0
 
-        # Count unique destination IPs
         unique_ips = len(set(p["dst_ip"] for p in _packets))
-
-        # Total bytes sent
         total_bytes = sum(p["size"] for p in _packets)
 
     return {
@@ -178,8 +184,8 @@ def get_status() -> dict:
 
 def get_traffic_summary() -> dict:
     """
-    Aggregate packet data into a summary dictionary.
-    This is what the anomaly detector consumes on Day 6.
+    Aggregate packet data into a deep summary dictionary.
+    Calculates SYN counts, extracts hostnames, and tracks ports for attack detection.
     """
     with _lock:
         packets = list(_packets)
@@ -191,28 +197,51 @@ def get_traffic_summary() -> dict:
             "unique_dst_ips"  : 0,
             "bytes_per_second": 0,
             "packets_per_sec" : 0,
-            "top_destinations": [],
-            "port_counts"     : {},
+            "tcp_syn_count"   : 0,
+            "avg_packet_size" : 0,
+            "active_connections": []
         }
 
     total_packets = len(packets)
     total_bytes   = sum(p["size"] for p in packets)
+    avg_packet_size = int(total_bytes / total_packets)
 
-    # Unique destination IPs
-    ip_counts = defaultdict(int)
+    # Variables for Attack Detection
+    tcp_syn_count = sum(1 for p in packets if 'S' in p["tcp_flag"])
+
+    # Aggregate by Destination IP
+    # We want to build a list of all background servers we are talking to
+    connections = {}
+    
     for p in packets:
-        ip_counts[p["dst_ip"]] += 1
-    unique_dst_ips = len(ip_counts)
+        ip = p["dst_ip"]
+        if ip not in connections:
+            connections[ip] = {
+                "ip": ip,
+                "hostname": "Resolving...",
+                "bytes": 0,
+                "packets": 0,
+                "unique_ports": set(),
+                "protocols": set()
+            }
+        
+        connections[ip]["bytes"] += p["size"]
+        connections[ip]["packets"] += 1
+        connections[ip]["unique_ports"].add(p["port"])
+        connections[ip]["protocols"].add(p["protocol"])
 
-    # Top 5 destination IPs by packet count
-    top_destinations = sorted(
-        ip_counts.items(), key=lambda x: x[1], reverse=True
-    )[:5]
+    # Resolve hostnames and clean up sets for JSON serialization
+    active_connections = []
+    for ip, data in connections.items():
+        data["hostname"] = _resolve_hostname(ip)
+        data["port_count"] = len(data["unique_ports"])
+        data["ports"] = list(data["unique_ports"])[:5] # Only send first 5 to UI
+        data["protocols"] = list(data["protocols"])
+        del data["unique_ports"]
+        active_connections.append(data)
 
-    # Port frequency
-    port_counts = defaultdict(int)
-    for p in packets:
-        port_counts[str(p["port"])] += 1
+    # Sort connections by bytes transferred (largest first)
+    active_connections.sort(key=lambda x: x["bytes"], reverse=True)
 
     # Rates (based on monitoring duration)
     duration = time.time() - _start_time if _start_time else 1
@@ -224,102 +253,17 @@ def get_traffic_summary() -> dict:
     return {
         "total_packets"   : total_packets,
         "total_bytes"     : total_bytes,
-        "unique_dst_ips"  : unique_dst_ips,
+        "unique_dst_ips"  : len(active_connections),
         "bytes_per_second": bytes_per_second,
         "packets_per_sec" : packets_per_sec,
-        "top_destinations": top_destinations,
-        "port_counts"     : dict(port_counts),
+        "tcp_syn_count"   : tcp_syn_count,
+        "avg_packet_size" : avg_packet_size,
+        "active_connections": active_connections[:50] # Top 50 connections
     }
 
 
 def set_alert(reason: str):
-    """Called by the anomaly detector on Day 6 to trigger an alert."""
     global _alert_triggered, _alert_reason
     _alert_triggered = True
     _alert_reason    = reason
     print(f"[monitor] ALERT TRIGGERED: {reason}")
-
-
-# ── Self test ──────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    import urllib.request
-
-    print("=" * 55)
-    print("  NETWORK MONITOR — LIVE CAPTURE TEST")
-    print("=" * 55)
-    print("\nThis test will:")
-    print("  1. Start the packet sniffer")
-    print("  2. Make 3 real HTTP requests to generate traffic")
-    print("  3. Wait 15 seconds")
-    print("  4. Stop and show what was captured\n")
-
-    # Start monitoring
-    start_monitoring()
-    print("\n[test] Sniffer running — generating test traffic...\n")
-
-    # Generate some real outgoing traffic
-    test_urls = [
-        "http://example.com",
-        "http://httpbin.org/get",
-        "http://neverssl.com",
-    ]
-
-    for url in test_urls:
-        try:
-            urllib.request.urlopen(url, timeout=5)
-            print(f"[test] Request sent to: {url}")
-        except Exception as e:
-            print(f"[test] Request failed (still generates packets): {url}")
-
-    # Wait for packets to accumulate
-    print("\n[test] Capturing for 15 seconds...")
-    for i in range(15, 0, -1):
-        time.sleep(1)
-        status = get_status()
-        print(f"  {i:2}s remaining — "
-              f"packets: {status['total_packets']:4}  "
-              f"bytes: {status['total_bytes']:8}  "
-              f"unique IPs: {status['unique_dst_ips']}", end="\r")
-
-    print()
-
-    # Stop
-    stop_monitoring()
-
-    # Show summary
-    summary = get_traffic_summary()
-    status  = get_status()
-
-    print(f"\n{'=' * 55}")
-    print(f"  CAPTURE SUMMARY")
-    print(f"{'=' * 55}")
-    print(f"  Total packets    : {summary['total_packets']}")
-    print(f"  Total bytes      : {summary['total_bytes']:,}")
-    print(f"  Unique dest IPs  : {summary['unique_dst_ips']}")
-    print(f"  Bytes / second   : {summary['bytes_per_second']}")
-    print(f"  Packets / second : {summary['packets_per_sec']}")
-
-    if summary["top_destinations"]:
-        print(f"\n  Top destination IPs:")
-        for ip, count in summary["top_destinations"]:
-            print(f"    {ip:<20} {count} packets")
-
-    if summary["port_counts"]:
-        print(f"\n  Ports contacted:")
-        sorted_ports = sorted(
-            summary["port_counts"].items(),
-            key=lambda x: x[1], reverse=True
-        )[:5]
-        for port, count in sorted_ports:
-            print(f"    Port {port:<8} {count} packets")
-
-    print(f"\n{'=' * 55}")
-
-    if summary["total_packets"] > 0:
-        print(f"  monitor.py working correctly.")
-        print(f"  Packets captured successfully.")
-    else:
-        print(f"  WARNING: Zero packets captured.")
-        print(f"  Make sure VS Code is running as Administrator.")
-
-    print(f"{'=' * 55}")

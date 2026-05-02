@@ -2,72 +2,80 @@
 {% block title %}ThreatShield — Scan{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-4">
-  <div class="col-lg-7">
-
-    <div class="text-center mb-5">
-      <i class="bi bi-shield-lock-fill display-1 text-danger"></i>
-      <h1 class="fw-bold mt-3">ThreatShield</h1>
-      <p class="text-muted lead">
-        AI-powered threat detection with tamper-proof blockchain logging
-      </p>
+<!-- Hero -->
+<div class="row justify-content-center">
+  <div class="col-lg-6 text-center mb-5" style="animation: fadeSlideUp 0.5s ease both;">
+    <div style="display:inline-flex;align-items:center;justify-content:center;
+                width:72px;height:72px;border-radius:20px;margin-bottom:1.25rem;
+                background:linear-gradient(135deg,rgba(239,68,68,0.15),rgba(139,92,246,0.1));
+                border:1px solid rgba(239,68,68,0.2);
+                box-shadow:0 0 40px rgba(239,68,68,0.12);">
+      <i class="bi bi-shield-lock-fill" style="font-size:2rem;color:var(--accent-red);"></i>
     </div>
+    <h1 class="fw-bold mb-2 glitch-text" data-text="ThreatShield" style="font-size:2.4rem;letter-spacing:-0.5px;">
+      ThreatShield
+    </h1>
+    <p style="color:var(--text-secondary);font-size:1rem;max-width:420px;margin:0 auto;">
+      AI-powered threat detection with tamper-proof blockchain logging
+    </p>
+  </div>
+</div>
 
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
+<!-- Scan Card -->
+<div class="row justify-content-center">
+  <div class="col-lg-6" style="animation: scaleIn 0.45s ease both; animation-delay:0.1s;">
+    <div class="card shadow-lg" style="padding:0;">
+      <div class="card-body p-4 p-md-5">
 
-        <!-- Tab selector -->
+        <!-- Tab Switcher -->
         <ul class="nav nav-pills mb-4 justify-content-center" id="scanTabs">
           <li class="nav-item">
-            <button class="nav-link active px-4" id="url-tab"
-                    onclick="switchTab('url')">
-              <i class="bi bi-link-45deg me-1"></i>URL
+            <button class="nav-link active" id="url-tab" onclick="switchTab('url')">
+              <i class="bi bi-link-45deg"></i> URL
             </button>
           </li>
           <li class="nav-item">
-            <button class="nav-link px-4" id="file-tab"
-                    onclick="switchTab('file')">
-              <i class="bi bi-file-earmark me-1"></i>File
+            <button class="nav-link" id="file-tab" onclick="switchTab('file')">
+              <i class="bi bi-file-earmark-binary"></i> File
             </button>
           </li>
         </ul>
 
         <!-- URL Form -->
-        <form id="url-form" action="/analyse" method="POST">
-          <input type="hidden" name="input_type" value="url"/>
-          <div class="mb-3">
-            <label class="form-label text-muted small">Enter URL to scan</label>
+        <form id="url-form" action="/analyse" method="POST" data-no-swup>
+          <input type="hidden" name="input_type" value="url" />
+          <div class="mb-4">
+            <label class="form-label">Enter URL to scan</label>
             <div class="input-group input-group-lg">
-              <span class="input-group-text bg-dark border-secondary">
-                <i class="bi bi-link-45deg text-muted"></i>
+              <span class="input-group-text">
+                <i class="bi bi-link-45deg" style="color:var(--text-secondary);"></i>
               </span>
-              <input type="text" name="url" class="form-control form-control-lg"
-                     placeholder="https://example.com"
-                     required/>
+              <input type="text" name="url" id="url-input" class="form-control form-control-lg"
+                placeholder="https://example.com" required autocomplete="off" spellcheck="false" />
             </div>
           </div>
-          <div class="d-grid mt-4">
-            <button type="submit" class="btn btn-danger btn-lg">
-              <i class="bi bi-shield-check me-2"></i>Analyse URL
+          <div class="d-grid" style="position:relative;">
+            <button type="submit" class="btn btn-danger btn-lg" id="url-submit-btn">
+              <i class="bi bi-shield-check"></i> Analyse URL
             </button>
           </div>
         </form>
 
         <!-- File Form -->
-        <form id="file-form" action="/analyse" method="POST"
-              enctype="multipart/form-data" style="display:none;">
-          <input type="hidden" name="input_type" value="file"/>
-          <div class="mb-3">
-            <label class="form-label text-muted small">Upload file to scan</label>
-            <input type="file" name="file" class="form-control form-control-lg"
-                   required/>
-            <div class="form-text text-muted">
-              Detects disguised executables using magic byte analysis
-            </div>
+        <form id="file-form" action="/analyse" method="POST" enctype="multipart/form-data" style="display:none;"
+          data-no-swup>
+          <input type="hidden" name="input_type" value="file" />
+          <div class="mb-4">
+            <label class="form-label">Upload file to scan</label>
+            <input type="file" name="file" class="form-control form-control-lg" required />
+            <p class="mt-2 mb-0" style="color:var(--text-muted);font-size:0.8rem;">
+              <i class="bi bi-info-circle me-1"></i>
+              Detects disguised executables using magic byte + entropy analysis
+            </p>
           </div>
-          <div class="d-grid mt-4">
-            <button type="submit" class="btn btn-danger btn-lg">
-              <i class="bi bi-shield-check me-2"></i>Analyse File
+          <div class="d-grid">
+            <button type="submit" class="btn btn-danger btn-lg" id="file-submit-btn">
+              <i class="bi bi-shield-check"></i> Analyse File
             </button>
           </div>
         </form>
@@ -76,67 +84,36 @@
     </div>
 
     <!-- Feature badges -->
-    <!-- Feature badges -->
-    <div class="row text-center mt-4 g-3">
-        <div class="col-4">
-            <div class="card h-100 py-3 px-2">
-                <i class="bi bi-cpu text-danger fs-3"></i>
-                <div class="fw-500 mt-2 small">AI Detection</div>
-                <small class="text-muted" style="font-size:0.75rem;">
-                    99.4% accuracy
-                </small>
-            </div>
+    <div class="row g-3 mt-2 stagger">
+      <div class="col-4">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:rgba(239,68,68,0.1);">
+            <i class="bi bi-cpu" style="color:var(--accent-red);"></i>
+          </div>
+          <div style="font-size:0.8rem;font-weight:600;">AI Detection</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">99.4% accuracy</div>
         </div>
-        <div class="col-4">
-            <div class="card h-100 py-3 px-2">
-                <i class="bi bi-activity text-warning fs-3"></i>
-                <div class="fw-500 mt-2 small">Live Monitor</div>
-                <small class="text-muted" style="font-size:0.75rem;">
-                    Real-time packets
-                </small>
-            </div>
+      </div>
+      <div class="col-4">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:rgba(245,158,11,0.1);">
+            <i class="bi bi-activity" style="color:var(--accent-amber);"></i>
+          </div>
+          <div style="font-size:0.8rem;font-weight:600;">Live Monitor</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Real-time packets</div>
         </div>
-        <div class="col-4">
-            <div class="card h-100 py-3 px-2">
-                <i class="bi bi-database-lock text-info fs-3"></i>
-                <div class="fw-500 mt-2 small">Blockchain Logs</div>
-                <small class="text-muted" style="font-size:0.75rem;">
-                    Tamper-proof
-                </small>
-            </div>
+      </div>
+      <div class="col-4">
+        <div class="feature-card">
+          <div class="feature-icon" style="background:rgba(6,182,212,0.1);">
+            <i class="bi bi-database-lock" style="color:var(--accent-cyan);"></i>
+          </div>
+          <div style="font-size:0.8rem;font-weight:600;">Blockchain</div>
+          <div style="font-size:0.72rem;color:var(--text-muted);">Tamper-proof</div>
         </div>
+      </div>
     </div>
-  </div>
-</div>
-
 
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-function switchTab(tab) {
-  document.getElementById('url-form').style.display  =
-    tab === 'url'  ? 'block' : 'none';
-  document.getElementById('file-form').style.display =
-    tab === 'file' ? 'block' : 'none';
-  document.getElementById('url-tab').classList.toggle('active',  tab === 'url');
-  document.getElementById('file-tab').classList.toggle('active', tab === 'file');
-}
-
-// Show loading spinner on form submit
-document.addEventListener('DOMContentLoaded', function() {
-  const forms = document.querySelectorAll('form');
-  forms.forEach(form => {
-    form.addEventListener('submit', function() {
-      const btn = form.querySelector('button[type="submit"]');
-      btn.disabled = true;
-      btn.innerHTML =
-        '<span class="spinner-border spinner-border-sm me-2"></span>' +
-        'Analysing...';
-    });
-  });
-});
-</script>
 {% endblock %}

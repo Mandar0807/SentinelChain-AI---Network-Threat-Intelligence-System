@@ -2,124 +2,180 @@
 {% block title %}ThreatShield — Result{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-3">
+
+{% if result.verdict == "SAFE" %}
+  {% set vc = "success" %}{% set vi = "shield-check-fill" %}{% set vhex = "#22c55e" %}{% set vglow = "34,197,94" %}
+{% elif result.verdict == "SUSPICIOUS" %}
+  {% set vc = "warning" %}{% set vi = "shield-exclamation" %}{% set vhex = "#f59e0b" %}{% set vglow = "245,158,11" %}
+{% else %}
+  {% set vc = "danger" %}{% set vi = "shield-x-fill" %}{% set vhex = "#ef4444" %}{% set vglow = "239,68,68" %}
+{% endif %}
+
+<div class="row justify-content-center">
   <div class="col-lg-8">
 
-    <a href="/" class="btn btn-outline-secondary btn-sm mb-4">
-      <i class="bi bi-arrow-left me-1"></i>New Scan
+    <!-- Back button -->
+    <a href="/" class="btn btn-outline-secondary btn-sm mb-4"
+       style="animation:fadeIn 0.3s ease both;">
+      <i class="bi bi-arrow-left"></i> New Scan
     </a>
 
-    <!-- Verdict Card -->
-    {% if result.verdict == "SAFE" %}
-      {% set verdict_class = "success" %}
-      {% set verdict_icon  = "shield-check-fill" %}
-    {% elif result.verdict == "SUSPICIOUS" %}
-      {% set verdict_class = "warning" %}
-      {% set verdict_icon  = "shield-exclamation" %}
-    {% else %}
-      {% set verdict_class = "danger" %}
-      {% set verdict_icon  = "shield-x-fill" %}
-    {% endif %}
-
-    <div class="card shadow-sm mb-4 border-{{ verdict_class }}">
-      <div class="card-body text-center py-5">
-        <i class="bi bi-{{ verdict_icon }} display-1 text-{{ verdict_class }}"></i>
-        <h1 class="fw-bold mt-3 text-{{ verdict_class }}">
-          {{ result.verdict }}
-        </h1>
-        <p class="text-muted mb-0">
-          {{ result.input_type | upper }} analysed by
-          {{ result.get('source', 'System') }}
-        </p>
+    <!-- Verdict Hero Card -->
+    <div class="card mb-4 verdict-{{ vc }} text-center"
+         style="padding:2.5rem 1.5rem;animation:scaleIn 0.45s ease both;">
+      <div style="display:inline-flex;align-items:center;justify-content:center;
+                  width:80px;height:80px;border-radius:50%;margin:0 auto 1.25rem;
+                  background:rgba({{ vglow }},0.12);
+                  box-shadow:0 0 0 12px rgba({{ vglow }},0.06);"
+           {% if vc == 'danger' %}class="pulse-danger"{% endif %}>
+        <i class="bi bi-{{ vi }}" style="font-size:2.5rem;color:{{ vhex }};"></i>
       </div>
+      <h1 class="fw-bold mb-1" style="font-size:2.2rem;color:{{ vhex }};letter-spacing:-0.5px;">
+        {{ result.verdict }}
+      </h1>
+      <p style="color:var(--text-secondary);margin:0;font-size:0.9rem;">
+        {{ result.input_type | upper }} analysed &mdash;
+        <span style="color:var(--text-muted);">{{ result.get('source', 'AI Engine') }}</span>
+      </p>
     </div>
 
     <!-- Stats Row -->
-<div class="row g-3 mb-4">
-  <div class="col-6 col-md-3">
-    <div class="card text-center py-3 h-100">
-      <div class="fs-2 fw-bold text-{{ verdict_class }}">
-        {{ result.risk_score | round | int }}
-      </div>
-      <small class="text-muted">Risk Score / 100</small>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card text-center py-3 h-100">
-      <div class="fs-2 fw-bold">
-        {{ result.get('confidence', 0) }}%
-      </div>
-      <small class="text-muted">Confidence</small>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card text-center py-3 h-100">
-      <div class="fs-2 fw-bold">
-        {{ result.flags | length }}
-      </div>
-      <small class="text-muted">Flags Found</small>
-    </div>
-  </div>
-  <div class="col-6 col-md-3">
-    <div class="card text-center py-3 h-100">
-      <div class="mt-1">
-        {% if result.get('source') == 'AI model' %}
-          <span class="badge bg-danger px-2 py-1">AI Model</span>
-        {% else %}
-          <span class="badge bg-secondary px-2 py-1">Rule-based</span>
-        {% endif %}
-      </div>
-      <small class="text-muted mt-1 d-block">Detection Source</small>
-    </div>
-  </div>
-</div>
+    <div class="row g-3 mb-4 stagger">
 
-    <!-- Input Info -->
-    <div class="card mb-4">
-      <div class="card-body">
-        <h6 class="text-muted mb-2">
-          <i class="bi bi-info-circle me-1"></i>Scanned Input
-        </h6>
-        <code class="text-break">{{ result.input }}</code>
+      <!-- Risk Score Ring -->
+      <div class="col-6 col-md-3">
+        <div class="stat-card" style="padding:1.5rem 1rem;">
+          <svg width="80" height="80" viewBox="0 0 80 80" class="risk-ring" style="transform:rotate(-90deg);display:block;margin:0 auto 0.5rem;">
+            <circle class="risk-ring-track" cx="40" cy="40" r="32"/>
+            <circle class="risk-ring-fill" cx="40" cy="40" r="32"
+                    id="risk-fill"
+                    stroke="{{ vhex }}"
+                    stroke-dasharray="201.06"
+                    stroke-dashoffset="201.06"/>
+          </svg>
+          <div class="stat-value" style="font-size:1.5rem;color:{{ vhex }};" id="risk-score-text">0</div>
+          <div class="stat-label">Risk Score</div>
+        </div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-value" id="conf-text">0%</div>
+          <div class="stat-label">Confidence</div>
+        </div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          <div class="stat-value" style="color:var(--accent-amber);">{{ result.flags | length }}</div>
+          <div class="stat-label">Flags Found</div>
+        </div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <div class="stat-card">
+          {% if result.get('source') == 'AI model' %}
+            <div class="stat-value" style="font-size:1rem;padding-top:0.5rem;">
+              <span class="badge bg-danger">AI Model</span>
+            </div>
+          {% else %}
+            <div class="stat-value" style="font-size:1rem;padding-top:0.5rem;">
+              <span class="badge bg-secondary">Rule-based</span>
+            </div>
+          {% endif %}
+          <div class="stat-label">Detection</div>
+        </div>
       </div>
     </div>
 
-    <!-- Flags -->
-    {% if result.flags %}
-    <div class="card mb-4">
+    <!-- Scanned Input -->
+    <div class="card mb-4" style="animation:fadeSlideUp 0.4s ease both;animation-delay:0.2s;">
       <div class="card-header">
-        <i class="bi bi-flag-fill text-danger me-2"></i>
-        <strong>Threat Indicators</strong>
+        <i class="bi bi-terminal me-2" style="color:var(--accent-cyan);"></i>Scanned Input
+      </div>
+      <div class="card-body">
+        <code style="word-break:break-all;font-size:0.85rem;">{{ result.input }}</code>
+      </div>
+    </div>
+
+    <!-- Threat Indicators / Clear -->
+    {% if result.flags %}
+    <div class="card mb-4" style="animation:fadeSlideUp 0.4s ease both;animation-delay:0.25s;">
+      <div class="card-header">
+        <i class="bi bi-flag-fill me-2" style="color:var(--accent-red);"></i>
+        Threat Indicators
+        <span class="badge bg-danger ms-2">{{ result.flags | length }}</span>
       </div>
       <ul class="list-group list-group-flush">
         {% for flag in result.flags %}
-        <li class="list-group-item d-flex align-items-center gap-2">
-          <i class="bi bi-exclamation-triangle-fill text-warning"></i>
-          {{ flag }}
+        <li class="list-group-item d-flex align-items-start gap-3"
+            style="animation:fadeSlideUp 0.35s ease both;animation-delay:{{ loop.index * 0.07 }}s;">
+          <i class="bi bi-exclamation-triangle-fill mt-1"
+             style="color:var(--accent-amber);flex-shrink:0;"></i>
+          <span style="font-size:0.875rem;">{{ flag }}</span>
         </li>
         {% endfor %}
       </ul>
     </div>
     {% else %}
-    <div class="alert alert-success">
-      <i class="bi bi-check-circle-fill me-2"></i>
-      No suspicious indicators found.
+    <div class="alert alert-success mb-4"
+         style="animation:fadeSlideUp 0.4s ease both;animation-delay:0.25s;">
+      <i class="bi bi-check-circle-fill" style="font-size:1.1rem;"></i>
+      No suspicious indicators found. This appears to be safe.
     </div>
     {% endif %}
 
     <!-- Actions -->
-    <div class="d-flex gap-3 flex-wrap">
+    <div class="d-flex gap-3 flex-wrap"
+         style="animation:fadeSlideUp 0.4s ease both;animation-delay:0.3s;">
       <a href="/" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Scan Another
+        <i class="bi bi-arrow-left"></i> Scan Another
       </a>
+      {% if result.input_type == 'url' %}
+      <a href="/monitor?target={{ result.input }}" class="btn btn-warning">
+        <i class="bi bi-activity"></i> Deep Monitor
+      </a>
+      {% else %}
       <a href="/monitor" class="btn btn-warning">
-        <i class="bi bi-activity me-1"></i>Start Runtime Monitor
+        <i class="bi bi-activity"></i> Deep Monitor
       </a>
+      {% endif %}
       <a href="/logs" class="btn btn-info">
-        <i class="bi bi-database-lock me-1"></i>View Blockchain Logs
+        <i class="bi bi-database-lock"></i> Blockchain Logs
       </a>
     </div>
 
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const riskScore = {{ result.risk_score | round | int }};
+const confidence = {{ result.get('confidence', 0) }};
+const circumference = 201.06;
+
+// Animate risk ring on load
+window.addEventListener('load', () => {
+  const fill = document.getElementById('risk-fill');
+  const scoreText = document.getElementById('risk-score-text');
+  const confText  = document.getElementById('conf-text');
+
+  // Animate the circle
+  setTimeout(() => {
+    const offset = circumference - (riskScore / 100) * circumference;
+    fill.style.strokeDashoffset = offset;
+  }, 150);
+
+  // Count up number
+  let s = 0, c = 0;
+  const interval = setInterval(() => {
+    s = Math.min(s + 2, riskScore);
+    c = Math.min(c + 2, confidence);
+    scoreText.textContent = s;
+    confText.textContent  = c + '%';
+    if (s >= riskScore && c >= confidence) clearInterval(interval);
+  }, 20);
+});
+</script>
 {% endblock %}

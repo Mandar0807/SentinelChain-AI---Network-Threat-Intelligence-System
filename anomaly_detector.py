@@ -1,47 +1,36 @@
 import numpy as np
 import joblib
 import os
-import time
 from sklearn.ensemble import IsolationForest
 
 MODEL_PATH = "models/anomaly_model.pkl"
 
 # ── Feature extraction from traffic summary ────────────────────────────────
 def extract_features(summary: dict) -> list:
-    """
-    Converts a traffic summary dictionary from monitor.py
-    into a flat feature vector for the IsolationForest model.
-    """
     return [
         summary.get("total_packets",    0),
         summary.get("total_bytes",      0),
         summary.get("unique_dst_ips",   0),
         summary.get("bytes_per_second", 0),
         summary.get("packets_per_sec",  0),
+        summary.get("tcp_syn_count",    0),
+        summary.get("avg_packet_size",  0),
     ]
 
 
 # ── Generate synthetic normal traffic samples ──────────────────────────────
 def generate_normal_samples(n: int = 1000) -> np.ndarray:
-    """
-    Creates synthetic examples of what normal background traffic looks like.
-    Based on the real values we observed in Day 5:
-      - 186 packets in 15 seconds (~12 packets/sec)
-      - 27,001 bytes (~1800 bytes/sec)
-      - 28 unique destination IPs
-
-    We model normal traffic as low-volume, low-IP-count, steady rate.
-    """
     np.random.seed(42)
-
     samples = []
     for _ in range(n):
-        # Normal: low packet rate, few unique IPs, moderate bytes
-        total_packets    = np.random.randint(5,   200)
-        total_bytes      = np.random.randint(500, 30000)
-        unique_dst_ips   = np.random.randint(1,   30)
-        bytes_per_second = np.random.uniform(100, 3000)
-        packets_per_sec  = np.random.uniform(0.5, 15)
+        # Normal web browsing simulation
+        total_packets    = np.random.randint(5,   500)
+        total_bytes      = np.random.randint(500, 500000)
+        unique_dst_ips   = np.random.randint(1,   50)
+        bytes_per_second = np.random.uniform(100, 50000)
+        packets_per_sec  = np.random.uniform(0.5, 50)
+        tcp_syn_count    = np.random.randint(0,   int(total_packets * 0.1) + 1) # Normal is < 10% SYN
+        avg_packet_size  = np.random.randint(40,  1500)
 
         samples.append([
             total_packets,
@@ -49,6 +38,8 @@ def generate_normal_samples(n: int = 1000) -> np.ndarray:
             unique_dst_ips,
             bytes_per_second,
             packets_per_sec,
+            tcp_syn_count,
+            avg_packet_size
         ])
 
     return np.array(samples)
@@ -56,17 +47,13 @@ def generate_normal_samples(n: int = 1000) -> np.ndarray:
 
 # ── Train the IsolationForest ──────────────────────────────────────────────
 def train(n_samples: int = 1000):
-    """
-    Train IsolationForest on synthetic normal traffic samples.
-    Save model to disk.
-    """
     print("[anomaly] Generating normal traffic samples...")
     X_normal = generate_normal_samples(n_samples)
 
     print(f"[anomaly] Training IsolationForest on {n_samples} samples...")
     model = IsolationForest(
         n_estimators  = 100,
-        contamination = 0.05,   # expect 5% anomalies in real data
+        contamination = 0.05,
         random_state  = 42,
     )
     model.fit(X_normal)
@@ -78,65 +65,57 @@ def train(n_samples: int = 1000):
 
 
 def load_model():
-    """Load trained IsolationForest from disk."""
     if not os.path.exists(MODEL_PATH):
         print("[anomaly] No model found — training now...")
         return train()
     return joblib.load(MODEL_PATH)
 
 
-# ── Threshold-based rules (layer 2 check) ─────────────────────────────────
+# ── Smart Attack Detection Rules ─────────────────────────────────────────
 def _rule_based_check(summary: dict) -> tuple:
     """
-    Hard rules that flag obviously malicious traffic
-    regardless of what the ML model says.
-    Returns (is_suspicious, reason)
+    Looks for specific attack signatures: Port Scans, SYN Floods, Exfiltration.
     """
     reasons = []
+    is_suspicious = False
 
-    bps  = summary.get("bytes_per_second", 0)
-    pps  = summary.get("packets_per_sec",  0)
-    ips  = summary.get("unique_dst_ips",   0)
-    pkts = summary.get("total_packets",    0)
+    pkts = summary.get("total_packets", 0)
+    syns = summary.get("tcp_syn_count", 0)
+    avg_size = summary.get("avg_packet_size", 0)
+    connections = summary.get("active_connections", [])
 
-    # Exfiltration signature: very high outgoing data rate
-    if bps > 50000:
-        reasons.append(
-            f"High data rate: {round(bps/1000, 1)} KB/s outgoing "
-            f"(threshold: 50 KB/s)"
-        )
+    # 1. SYN Flood Detection (DDoS)
+    # If a large burst of traffic is mostly just TCP SYN connection requests
+    if pkts > 100 and (syns / pkts) > 0.5:
+        reasons.append(f"SYN Flood Detected: {syns} SYN packets out of {pkts} total packets. The website may be trying to launch a DDoS attack.")
+        is_suspicious = True
 
-    # Scanning / C2 signature: too many unique IPs
-    if ips > 50:
-        reasons.append(
-            f"Contacting {ips} unique IPs "
-            f"(threshold: 50) — possible scanning or C2 traffic"
-        )
+    # 2. Port Scan Detection
+    # If the website hits 10+ different ports on a SINGLE server, that's a scan.
+    for conn in connections:
+        if conn.get("port_count", 0) > 10:
+            reasons.append(f"Port Scan Detected: Scanning {conn['port_count']} different ports on {conn['hostname']} ({conn['ip']}).")
+            is_suspicious = True
 
-    # Burst traffic: very high packet rate
-    if pps > 100:
-        reasons.append(
-            f"Packet burst: {round(pps, 1)} packets/sec "
-            f"(threshold: 100) — possible flood"
-        )
+    # 3. Data Exfiltration
+    # If the website is secretly uploading massive amounts of data at maximum packet size
+    bps = summary.get("bytes_per_second", 0)
+    if avg_size > 1300 and bps > 500000: # Sustained 500 KB/s of max-size packets
+        reasons.append(f"Possible Data Exfiltration: Uploading large blocks of data ({round(bps/1000)} KB/s, Avg packet size: {avg_size} bytes).")
+        is_suspicious = True
 
-    # Sustained high volume
-    if pkts > 2000:
-        reasons.append(
-            f"High packet volume: {pkts} packets captured — "
-            f"sustained abnormal activity"
-        )
+    # 4. Connection Spam
+    # Too many unique background servers contacted rapidly (e.g. Botnet / Scanner)
+    ips = summary.get("unique_dst_ips", 0)
+    if ips > 100:
+        reasons.append(f"Suspicious Networking: Contacted {ips} unique servers in a short time. Possible network scanner or ad-fraud.")
+        is_suspicious = True
 
-    is_suspicious = len(reasons) > 0
     return is_suspicious, reasons
 
 
 # ── Main prediction function ───────────────────────────────────────────────
 def analyse_traffic(summary: dict) -> dict:
-    """
-    Main function called by monitor.py and Flask app.
-    Takes a traffic summary dict, returns a threat assessment.
-    """
     result = {
         "verdict"         : "NORMAL",
         "is_anomaly"      : False,
@@ -161,7 +140,7 @@ def analyse_traffic(summary: dict) -> dict:
         ml_prediction  = model.predict(X)[0]        # 1=normal, -1=anomaly
         anomaly_score  = model.score_samples(X)[0]  # lower = more anomalous
 
-        # Normalize score to 0-100 (higher = more suspicious)
+        # Normalize score
         normalized     = round((1 - (anomaly_score + 0.5)) * 100, 1)
         normalized     = max(0, min(100, normalized))
 
@@ -170,92 +149,25 @@ def analyse_traffic(summary: dict) -> dict:
 
     except Exception as e:
         print(f"[anomaly] ML error: {e}")
+        # If shape error (from old model), retrain instantly
+        if "shape" in str(e).lower() or "features" in str(e).lower():
+            train()
+            return analyse_traffic(summary)
         result["ml_verdict"] = "UNKNOWN"
 
-    # ── Layer 2: Rule-based check ──────────────────────────────────────────
+    # ── Layer 2: Rule-based attack signatures ──────────────────────────────
     rule_suspicious, rule_reasons = _rule_based_check(summary)
     result["rule_verdict"] = "ANOMALY" if rule_suspicious else "NORMAL"
     result["flags"]        = rule_reasons
 
-    # ── Final verdict: either layer can trigger alert ──────────────────────
+    # ── Final verdict ──────────────────────────────────────────────────────
     if result["ml_verdict"] == "ANOMALY" or result["rule_verdict"] == "ANOMALY":
         result["is_anomaly"] = True
-        result["verdict"]    = "ANOMALY DETECTED"
-        result["confidence"] = round(result["anomaly_score"], 1)
+        result["verdict"]    = "THREAT DETECTED" if rule_suspicious else "ANOMALY DETECTED"
+        result["confidence"] = 99 if rule_suspicious else round(result["anomaly_score"], 1)
     else:
         result["is_anomaly"] = False
         result["verdict"]    = "NORMAL"
         result["confidence"] = round(100 - result["anomaly_score"], 1)
 
     return result
-
-
-def print_result(summary: dict, result: dict):
-    """Pretty print the anomaly detection result."""
-    icon = "✗" if result["is_anomaly"] else "✓"
-    print(f"\n{'=' * 55}")
-    print(f"  ANOMALY DETECTION RESULT")
-    print(f"{'=' * 55}")
-    print(f"  Verdict        : [{icon}] {result['verdict']}")
-    print(f"  ML verdict     : {result['ml_verdict']}")
-    print(f"  Rule verdict   : {result['rule_verdict']}")
-    print(f"  Anomaly score  : {result['anomaly_score']} / 100")
-    print(f"  Confidence     : {result['confidence']}%")
-    print(f"\n  Traffic stats:")
-    print(f"    Packets      : {summary.get('total_packets',    0)}")
-    print(f"    Bytes        : {summary.get('total_bytes',      0):,}")
-    print(f"    Unique IPs   : {summary.get('unique_dst_ips',   0)}")
-    print(f"    Bytes/sec    : {summary.get('bytes_per_second', 0)}")
-    print(f"    Packets/sec  : {summary.get('packets_per_sec',  0)}")
-    if result["flags"]:
-        print(f"\n  Flags:")
-        for flag in result["flags"]:
-            print(f"    - {flag}")
-    else:
-        print(f"\n  No suspicious indicators found.")
-    print(f"{'=' * 55}")
-
-
-# ── Self test ──────────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    print("=" * 55)
-    print("  ANOMALY DETECTOR — TRAINING + SELF TEST")
-    print("=" * 55)
-
-    # Train the model
-    train()
-
-    print("\n--- Test 1: Normal background traffic ---")
-    normal_summary = {
-        "total_packets"   : 186,
-        "total_bytes"     : 27001,
-        "unique_dst_ips"  : 28,
-        "bytes_per_second": 1071.94,
-        "packets_per_sec" : 7.38,
-    }
-    result = analyse_traffic(normal_summary)
-    print_result(normal_summary, result)
-
-    print("\n--- Test 2: Simulated data exfiltration ---")
-    exfil_summary = {
-        "total_packets"   : 3500,
-        "total_bytes"     : 850000,
-        "unique_dst_ips"  : 75,
-        "bytes_per_second": 95000,
-        "packets_per_sec" : 180,
-    }
-    result = analyse_traffic(exfil_summary)
-    print_result(exfil_summary, result)
-
-    print("\n--- Test 3: Borderline suspicious traffic ---")
-    suspicious_summary = {
-        "total_packets"   : 450,
-        "total_bytes"     : 75000,
-        "unique_dst_ips"  : 55,
-        "bytes_per_second": 8000,
-        "packets_per_sec" : 25,
-    }
-    result = analyse_traffic(suspicious_summary)
-    print_result(suspicious_summary, result)
-
-    print("\nanomalY_detector.py working correctly.")

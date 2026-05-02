@@ -3,40 +3,50 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="ThreatShield — AI-powered threat detection with tamper-proof blockchain logging"/>
   <title>{% block title %}ThreatShield{% endblock %}</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+  <!-- Bootstrap & Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet"/>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet"/>
+
+  <!-- Custom Styles -->
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet"/>
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark">
+<!-- ── Navbar ───────────────────────────────────────────── -->
+<nav class="navbar navbar-expand-lg" style="position:relative; z-index:10;">
   <div class="container">
-    <a class="navbar-brand fw-bold" href="/">
-      <i class="bi bi-shield-lock-fill text-danger me-2"></i>ThreatShield
+    <a class="navbar-brand" href="/">
+      <span class="brand-icon"><i class="bi bi-shield-lock-fill" style="color:#fff;"></i></span>
+      ThreatShield
     </a>
-    <button class="navbar-toggler" type="button"
-            data-bs-toggle="collapse" data-bs-target="#navMenu">
-      <span class="navbar-toggler-icon"></span>
+    <button class="navbar-toggler border-0" type="button"
+            data-bs-toggle="collapse" data-bs-target="#navMenu"
+            style="color:var(--text-secondary);">
+      <i class="bi bi-list fs-4"></i>
     </button>
     <div class="collapse navbar-collapse" id="navMenu">
-      <ul class="navbar-nav ms-auto">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-1">
         <li class="nav-item">
-          <a class="nav-link {% if request.path == '/' %}active{% endif %}"
-             href="/">
-            <i class="bi bi-search me-1"></i>Scan
+          <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">
+            <i class="bi bi-search"></i> Scan
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.path == '/monitor' %}active{% endif %}"
-             href="/monitor">
-            <i class="bi bi-activity me-1"></i>Monitor
+          <a class="nav-link {% if request.path == '/monitor' %}active{% endif %}" href="/monitor">
+            <i class="bi bi-activity"></i> Monitor
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.path == '/logs' %}active{% endif %}"
-             href="/logs">
-            <i class="bi bi-database-lock me-1"></i>Blockchain Logs
+          <a class="nav-link {% if request.path == '/logs' %}active{% endif %}" href="/logs">
+            <i class="bi bi-database-lock"></i> Blockchain Logs
           </a>
         </li>
       </ul>
@@ -44,17 +54,94 @@
   </div>
 </nav>
 
-<main class="container py-4">
-  {% block content %}{% endblock %}
+<!-- ── Main content ──────────────────────────────────────── -->
+<main class="container py-5 transition-fade" id="swup">
+  <div class="page-wrapper">
+    {% block content %}{% endblock %}
+  </div>
 </main>
 
-<footer class="text-center py-3 mt-4">
-  <small class="text-muted">
-    ThreatShield &mdash; AI + Blockchain Threat Detection
+<!-- ── Footer ───────────────────────────────────────────── -->
+<footer class="text-center" style="position:relative; z-index:10;">
+  <small>
+    ThreatShield &mdash; AI + Blockchain Threat Intelligence &nbsp;|&nbsp;
+    <span style="color:var(--accent-red);">&#9679;</span> Live
   </small>
 </footer>
 
+<!-- ── Toast container ──────────────────────────────────── -->
+<div id="ts-toast-container"></div>
+
+<!-- ── Background Particles ─────────────────────────────── -->
+<div id="tsparticles" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;"></div>
+
+<!-- Scripts -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/swup@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tsparticles/preset-network@3/tsparticles.preset.network.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/monitor.js') }}"></script>
+
+<!-- Global utility: Toast & page transitions -->
+<script>
+function showToast(msg, type = 'info') {
+  const icons = { success: 'check-circle-fill', danger: 'shield-fill-exclamation', info: 'info-circle-fill', warning: 'exclamation-triangle-fill' };
+  const colors = { success: 'var(--accent-green)', danger: 'var(--accent-red)', info: 'var(--accent-cyan)', warning: 'var(--accent-amber)' };
+  const t = document.createElement('div');
+  t.className = 'ts-toast';
+  t.innerHTML = `<i class="bi bi-${icons[type]}" style="color:${colors[type]};font-size:1.1rem;"></i> ${msg}`;
+  document.getElementById('ts-toast-container').appendChild(t);
+  setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 350); }, 3500);
+}
+
+// Initialize Swup for SPA-like transitions
+const swup = new Swup();
+
+swup.hooks.on('page:view', () => {
+    // Re-initialize any scripts after Swup page transition
+    if(typeof window.initMonitor === 'function') {
+        window.initMonitor();
+    }
+});
+
+// Global tab switcher for Scan page
+function switchTab(tab) {
+  const urlForm  = document.getElementById('url-form');
+  const fileForm = document.getElementById('file-form');
+  const urlTab   = document.getElementById('url-tab');
+  const fileTab  = document.getElementById('file-tab');
+
+  if(!urlForm || !fileForm) return;
+
+  if (tab === 'url') {
+    urlForm.style.display  = 'block';
+    fileForm.style.display = 'none';
+    urlTab.classList.add('active');
+    fileTab.classList.remove('active');
+  } else {
+    urlForm.style.display  = 'none';
+    fileForm.style.display = 'block';
+    fileTab.classList.add('active');
+    urlTab.classList.remove('active');
+  }
+}
+
+// Initialize tsParticles background
+tsParticles.load({
+    id: "tsparticles",
+    options: {
+        preset: "network",
+        background: { color: "transparent" },
+        particles: {
+            color: { value: "#ef4444" },
+            links: { color: "#ef4444", opacity: 0.15 },
+            move: { speed: 0.8 },
+            size: { value: 1.5 },
+            opacity: { value: 0.4 }
+        }
+    }
+});
+</script>
+
 {% block scripts %}{% endblock %}
 </body>
 </html>
